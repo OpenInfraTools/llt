@@ -1,73 +1,58 @@
 NAME = llt
+CC = zig cc
 
-ZIG = zig
+KERNEL = llt/kernel
+PLUGIN = llt/plugin
+UTILS  = llt/utils
+BUILD  = build
 
-BUILD_DIR = build
+INCLUDES = \
+	-I$(KERNEL)/include \
+	-I$(PLUGIN)/include \
+	-I$(UTILS)/include
 
-CFLAGS = -Wall -Wextra -O2 -fPIC
+SRCS = \
+	$(KERNEL)/src/api.c \
+	$(PLUGIN)/src/plugin.c \
+	$(UTILS)/src/arena.c
 
-MODULES = core tools
+OBJS = $(SRCS:.c=.o)
 
-SRCS := $(shell find $(MODULES) -type f -name "*.c" | sort)
-HEADERS := $(shell find $(MODULES) -type f -name "*.h" | sort)
+CFLAGS = -std=c11 -Wall -Wextra -fPIC $(INCLUDES)
 
-INCLUDES := \
-  -Icore/include \
-  -Itools/include
+ifeq ($(DEBUG),1)
+	CFLAGS += -O0 -g
+else
+	CFLAGS += -O3
+endif
 
 UNAME_S := $(shell uname -s)
-UNAME_M := $(shell uname -m)
-
-ifeq ($(UNAME_S),Darwin)
-	LIB_EXT = dylib
-	SHARED_FLAG = -dynamiclib
-endif
 
 ifeq ($(UNAME_S),Linux)
-	LIB_EXT = so
-	SHARED_FLAG = -shared
+	SHARED = -shared
+	OUT = lib$(NAME).so
 endif
 
-ifeq ($(OS),Windows_NT)
-	LIB_EXT = dll
-	SHARED_FLAG = -shared
+ifeq ($(UNAME_S),Darwin)
+	SHARED = -dynamiclib
+	OUT = lib$(NAME).dylib
 endif
 
-TARGET = $(BUILD_DIR)/lib$(NAME).$(LIB_EXT)
+all: $(BUILD)/$(OUT)
 
-build:
-	@mkdir -p $(BUILD_DIR)
-	$(ZIG) cc $(SHARED_FLAG) $(CFLAGS) $(INCLUDES) $(SRCS) -o $(TARGET)
+$(BUILD):
+	mkdir -p $(BUILD)
 
-linux:
-	@mkdir -p $(BUILD_DIR)/linux
-	$(ZIG) cc -shared -target x86_64-linux $(CFLAGS) $(INCLUDES) $(SRCS) -o $(BUILD_DIR)/linux/lib$(NAME).so
+$(BUILD)/$(OUT): $(OBJS) | $(BUILD)
+	$(CC) $(SHARED) -o $@ $(OBJS)
 
-windows:
-	@mkdir -p $(BUILD_DIR)/windows
-	$(ZIG) cc -shared -target x86_64-windows $(CFLAGS) $(INCLUDES) $(SRCS) -o $(BUILD_DIR)/windows/lib$(NAME).dll
-
-darwin-x64:
-	@mkdir -p $(BUILD_DIR)/darwin/x64
-	$(ZIG) cc -dynamiclib -target x86_64-macos $(CFLAGS) $(INCLUDES) $(SRCS) -o $(BUILD_DIR)/darwin/x64/lib$(NAME).dylib
-
-test:
-	$(ZIG) cc $(CFLAGS) $(INCLUDES) tests/*.c $(SRCS) -o $(BUILD_DIR)/test
-	./$(BUILD_DIR)/test
-
-gen-go: build
-	@mkdir -p api/go
-	@cp $(TARGET) api/go/lib$(NAME).$(LIB_EXT)
-	cd api/go && go run gen/main.go
-
-info:
-	@echo "OS: $(UNAME_S)"
-	@echo "Arch: $(UNAME_M)"
-	@echo "Sources: $(SRCS)"
-	@echo "Includes: $(INCLUDES)"
-	@echo "Target: $(TARGET)"
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -f $(OBJS)
+	rm -rf $(BUILD)
 
-.PHONY: build linux windows darwin-x64 test gen-go info clean
+re: clean all
+
+.PHONY: all clean re
