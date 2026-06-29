@@ -1,0 +1,12 @@
+language = "C"
+
+include_guard = "LLT_H"
+
+style = "both"
+
+[export]
+include = ["Module"]
+
+[parse]
+parse_deps = true
+clean = true
